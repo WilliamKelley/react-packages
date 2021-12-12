@@ -1,8 +1,30 @@
-## `react-meteor-data`
+# react-meteor-data
 
-This package provides an integration between React and [`Tracker`](https://atmospherejs.com/meteor/tracker), Meteor's reactive data system.
+An integration package between [React](https://reactjs.org/) and [Tracker](https://docs.meteor.com/api/tracker.html), Meteor's reactive data system.
 
-### Install
+## Table of Contents
+
+- [Installation](#installation)
+  - [Changelog](#changelog)
+- [Usage](#usage)
+  - [Versions summary](#versions-summary)
+  - [`useTracker`](#usetracker)
+    - [Basic usage](#basic-usage)
+    - [With dependencies](#with-dependencies)
+    - [Advanced usage](#advanced-usage)
+  - [`useSubscribe`](#usesubscribe)
+  - [`useFind`](#usefind)
+  - [`withTracker`](#withtracker)
+    - [Basic usage](#basic-usage-1)
+    - [Advanced usage](#advanced-usage-1)
+- [Appendix](#appendix)
+  - [On ESLint](#on-eslint)
+    - [Exhaustive dependencies](#enforcing-exhaustive-dependencies)
+  - [On TypeScript Interfaces](#on-typescript-interfaces)
+    - [Reactive function](#ireactivefnt)
+    - [Skip update](#iskipupdatet)
+
+## Installation
 
 To install the package, use `meteor add`:
 
@@ -16,45 +38,80 @@ You'll also need to install `react` if you have not already:
 meteor npm install react
 ```
 
-[check recent changes here](./CHANGELOG.md)
+### Changelog
 
-### Usage
+For recent changes, read the [CHANGELOG](./CHANGELOG.md).
 
-This package provides two ways to use Tracker reactive data in your React components:
-- a hook: `useTracker` (v2 only, requires React `^16.8`)
-- a higher-order component (HOC): `withTracker` (v1 and v2).
+## Usage
 
-The `useTracker` hook, introduced in version 2.0.0, embraces the [benefits of hooks](https://reactjs.org/docs/hooks-faq.html). Like all React hooks, it can only be used in function components, not in class components.
+This package provides two ways to use Tracker reactive data in your React components: `withTracker` and `useTracker`. The `withTracker` function is a [higher-order component (HOC)](https://reactjs.org/docs/higher-order-components.html) that can be used with all components, functional or class-based. The `useTracker` function is a React hook, introduced in version 2.0.0, and embraces the [benefits of hooks](https://reactjs.org/docs/hooks-faq.html). Like all React hooks, it can only be used in functional components, not in class components.
 
-The `withTracker` HOC can be used with all components, function or class based.
+_Note:_ It is not necessary to rewrite existing applications to use the `useTracker` hook instead of the existing `withTracker` HOC.
 
-It is not necessary to rewrite existing applications to use the `useTracker` hook instead of the existing `withTracker` HOC.
+### Versions summary
 
-#### `useTracker(reactiveFn)` basic hook
+|  | v1 | v2 | v2.4 |
+| --- | --- | --- | --- |
+| React | `>=15.3.0` | `>=16.8.0` | (same as v2) |
+| `withTracker` | ✅ | ✅ | ✅ |
+| `useTracker` | ❌ | ✅ | ✅ |
+| └─ `useSubscribe` | ❌ | ❌ | ✅ |
+| └─ `useFind` | ❌ | ❌ | ✅ |
 
-You can use the `useTracker` hook to get the value of a Tracker reactive function in your React "function components." The reactive function will get re-run whenever its reactive inputs change, and the component will re-render with the new value.
+### `useTracker(...)`
 
-`useTracker` manages its own state, and causes re-renders when necessary. There is no need to call React state setters from inside your `reactiveFn`. Instead, return the values from your `reactiveFn` and assign those to variables directly. When the `reactiveFn` updates, the variables will be updated, and the React component will re-render.
+Get the value of a Tracker reactive function in your React "function components." The reactive function will get re-run whenever its reactive inputs change, and the component will re-render with the new value.
 
-Arguments:
-- `reactiveFn`: A Tracker reactive function (receives the current computation).
+The hook manages its own state and causes re-renders when necessary. There is no need to call React state setters from inside your reactive function (`reactiveFn`). Instead, return values and assign them to variables, directly. When the reactive function updates, the variables will be updated, and the React component will re-render.
 
-The basic way to use `useTracker` is to simply pass it a reactive function, with no further fuss. This is the preferred configuration in many cases.
+#### TypeScript Signature
 
-#### `useTracker(reactiveFn, deps)` hook with deps
+_(+1 overload)_
+
+```ts
+function useTracker <T = any>(reactiveFn: IReactiveFn<T>, skipUpdate?: ISkipUpdate<T>): T;
+function useTracker <T = any>(reactiveFn: IReactiveFn<T>, deps?: DependencyList, skipUpdate?: ISkipUpdate<T>): T;
+```
+
+#### Arguments
+
+| Argument | Type | Required | Description |
+| --- | --- | --- | --- |
+| reactiveFn | [`IReactiveFn<T>`](#ireactivefnt) | Yes | A Tracker reactive function (receives the current computation). |
+| deps | `React.DependencyList` | No | An optional array of "dependencies" of the reactive function. This is very similar to how the `deps` argument for [React's built-in `useEffect`, `useCallback` or `useMemo` hooks](https://reactjs.org/docs/hooks-reference.html) work. |
+| skipUpdate | [`ISkipUpdate<T>`](#iskipupdatet) | No | 
+
+
+#### Basic usage
+
+Simply pass it a reactive function, with no further fuss. This is the preferred configuration in many cases.
+
+`useTracker(reactiveFn)`
+
+```jsx
+import React from 'react';
+import { useTracker } from 'meteor/react-meteor-data';
+
+// React function component.
+function Foo() {
+  // Get the logged-in user record (a reactive data source, see https://docs.meteor.com/api/accounts.html#Meteor-user )
+  const currentUser = useTracker(() => Meteor.user());
+  
+  return <h1>Hello {currentUser.username}</h1>;
+}
+```
+
+#### With dependencies
 
 You can pass an optional deps array as a second value. When provided, the computation will be retained, and reactive updates after the first run will run asynchronously from the react render execution frame. This array typically includes all variables from the outer scope "captured" in the closure passed as the 1st argument. For example, the value of a prop used in a subscription or a minimongo query; see example below.
 
-This should be considered a low level optimization step for cases where your computations are somewhat long running - like a complex minimongo query. In many cases it's safe and even preferred to omit deps and allow the computation to run synchronously with render.
+`useTracker(reactiveFn, deps)` 
 
-Arguments:
-- `reactiveFn`
-- `deps`: An optional array of "dependencies" of the reactive function. This is very similar to how the `deps` argument for [React's built-in `useEffect`, `useCallback` or `useMemo` hooks](https://reactjs.org/docs/hooks-reference.html) work.
+This should be considered a low level optimization step for cases where your computations are somewhat long running -- like a complex minimongo query. In many cases it's safe, and even preferred, to omit deps and allow the computation to run synchronously with render.
 
 ```js
 import { useTracker } from 'meteor/react-meteor-data';
 
-// React function component.
 function Foo({ listId }) {
   // This computation uses no value from the outer scope,
   // and thus does not needs to pass a 'deps' argument.
@@ -68,17 +125,20 @@ function Foo({ listId }) {
   // The following two computations both depend on the
   // listId prop. When deps are specified, the computation
   // will be retained.
-  const listLoading = useTracker(() => {
+  const isListLoading = useTracker(() => {
     // Note that this subscription will get cleaned up
     // when your component is unmounted or deps change.
     const handle = Meteor.subscribe('todoList', listId);
     return !handle.ready();
   }, [listId]);
-  const tasks = useTracker(() => Tasks.find({ listId }).fetch(), [listId]);
+  
+  const tasks = useTracker(() => {
+    return Tasks.find({ listId }).fetch();
+  }, [listId]);
 
   return (
     <h1>Hello {currentUser.username}</h1>
-    {listLoading ? (
+    {isListLoading ? (
         <div>Loading</div>
       ) : (
         <div>
